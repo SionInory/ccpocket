@@ -108,7 +108,7 @@ BRIDGE_CODEX_APP_SERVER_URL
 設定面を単純にするため、ドキュメント上は以下に寄せるのがよい。
 
 ```text
-BRIDGE_CODEX_APP_SERVER_MODE=private|managed|external
+BRIDGE_CODEX_APP_SERVER_MODE=private|managed|external|daemon
 BRIDGE_CODEX_SHARED_APP_SERVER_URL=ws://127.0.0.1:8767
 ```
 
@@ -121,6 +121,11 @@ managed では Bridge がこのURLで app-server を起動し、external では 
 - `managed`: shared URL 未指定なら `ws://127.0.0.1:8767`
 - `managed`: shared URL 指定ありなら、そのURLで Bridge が `codex app-server` を起動する
 - `external`: shared URL 必須。Bridge は app-server を起動せず、既存 app-server に接続する
+- `daemon`: 既定の Codex CLI managed daemon を `codex app-server proxy` 経由で再利用する。
+  proxy は stdio と Unix socket の raw byte 転送だけを行い、daemon 側の control socket は
+  WebSocket なので、Bridge は proxy の stdio 上で WebSocket client として接続する。
+  shared URL は不要で、Bridge は daemon の起動・停止を行わない。
+  daemon が未起動なら `codex app-server daemon start` で先に起動する
 
 `BRIDGE_CODEX_APP_SERVER_PORT` は初回取り込みでは削るか、互換用 alias に留める。
 ユーザー向けドキュメントには `BRIDGE_CODEX_SHARED_APP_SERVER_URL` を案内する。

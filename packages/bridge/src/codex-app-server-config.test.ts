@@ -21,6 +21,17 @@ describe("codex app-server config", () => {
     expect(codexCliJoinTarget("thr_123", {})).toBeUndefined();
   });
 
+  it("joins the default Codex daemon in daemon mode", () => {
+    expect(
+      codexCliJoinTarget("thr_123", {
+        BRIDGE_CODEX_APP_SERVER_MODE: "daemon",
+      }),
+    ).toEqual({
+      url: "unix://",
+      command: "codex resume thr_123",
+    });
+  });
+
   it("uses the managed default URL when no explicit URL is set", () => {
     expect(
       resolveCodexSharedAppServerUrl("managed", { BRIDGE_PORT: "8767" }),

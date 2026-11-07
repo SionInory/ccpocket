@@ -1,7 +1,11 @@
 const DEFAULT_CODEX_APP_SERVER_PORT = "8767";
 const FALLBACK_CODEX_APP_SERVER_PORT = "8768";
 
-export type CodexAppServerMode = "private" | "managed" | "external";
+export type CodexAppServerMode =
+  | "private"
+  | "managed"
+  | "external"
+  | "daemon";
 
 export function defaultCodexAppServerPort(bridgePort?: string): string {
   return bridgePort?.trim() === DEFAULT_CODEX_APP_SERVER_PORT
@@ -27,7 +31,7 @@ export function readCodexAppServerMode(
   env: NodeJS.ProcessEnv = process.env,
 ): CodexAppServerMode {
   const raw = env.BRIDGE_CODEX_APP_SERVER_MODE;
-  if (raw === "managed" || raw === "external") return raw;
+  if (raw === "managed" || raw === "external" || raw === "daemon") return raw;
   return "private";
 }
 
@@ -51,6 +55,12 @@ export function codexCliJoinTarget(
 ): { url: string; command: string } | undefined {
   const mode = readCodexAppServerMode(env);
   if (mode === "private") return undefined;
+  if (mode === "daemon") {
+    return {
+      url: "unix://",
+      command: `codex resume ${threadId}`,
+    };
+  }
 
   const url = resolveCodexSharedAppServerUrl(mode, env);
   if (!url) return undefined;

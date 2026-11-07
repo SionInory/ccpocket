@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { Duplex } from "node:stream";
 import { resolvePlatformPath } from "./path-utils.js";
 import {
   readCodexAppServerMode,
@@ -7,6 +8,9 @@ import {
   type CodexAppServerMode,
 } from "./codex-app-server-config.js";
 import WebSocket from "ws";
+
+const CODEX_APP_SERVER_STDIO_ARGS = ["app-server", "--listen", "stdio://"];
+const CODEX_APP_SERVER_PROXY_ARGS = ["app-server", "proxy"];
 
 export interface CodexTransportEvents {
   data: [string];
@@ -33,6 +37,7 @@ export abstract class CodexTransport extends EventEmitter<CodexTransportEvents> 
 export function buildCodexSpawnSpec(
   projectPath: string,
   platform: NodeJS.Platform = process.platform,
+  codexArgs: readonly string[] = CODEX_APP_SERVER_STDIO_ARGS,
 ): {
   command: string;
   args: string[];
@@ -48,7 +53,7 @@ export function buildCodexSpawnSpec(
   if (platform === "win32") {
     return {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", "codex app-server --listen stdio://"],
+      args: ["/d", "/s", "/c", ["codex", ...codexArgs].join(" ")],
       options: {
         cwd,
         stdio: "pipe",
@@ -60,7 +65,7 @@ export function buildCodexSpawnSpec(
 
   return {
     command: "codex",
-    args: ["app-server", "--listen", "stdio://"],
+    args: [...codexArgs],
     options: {
       cwd,
       stdio: "pipe",
@@ -73,7 +78,10 @@ class StdioCodexTransport extends CodexTransport {
   private child: ChildProcessWithoutNullStreams | null = null;
   private exited: Promise<void> = Promise.resolve();
 
-  constructor(private readonly platform: NodeJS.Platform) {
+  constructor(
+    private readonly platform: NodeJS.Platform,
+    private readonly codexArgs: readonly string[] = CODEX_APP_SERVER_STDIO_ARGS,
+  ) {
     super();
   }
 
@@ -82,7 +90,11 @@ class StdioCodexTransport extends CodexTransport {
   }
 
   start(projectPath: string): void {
-    const spawnSpec = buildCodexSpawnSpec(projectPath, this.platform);
+    const spawnSpec = buildCodexSpawnSpec(
+      projectPath,
+      this.platform,
+      this.codexArgs,
+    );
     const child = spawn(spawnSpec.command, spawnSpec.args, spawnSpec.options);
     this.child = child;
     this.exited = new Promise((resolve) => {
@@ -127,6 +139,171 @@ class StdioCodexTransport extends CodexTransport {
 
   override whenStopped(): Promise<void> {
     return this.exited;
+  }
+}
+
+/**
+ * `codex app-server proxy` tunnels raw bytes to the daemon's Unix socket.
+ * The daemon speaks WebSocket over that socket, so Bridge runs a WebSocket
+ * client over the proxy child's stdio instead of writing JSONL.
+ */
+class DaemonCodexTransport extends CodexTransport {
+  private child: ChildProcessWithoutNullStreams | null = null;
+  private ws: WebSocket | null = null;
+  private stopped = false;
+  private connected = false;
+  private reportedError = false;
+  private queue: string[] = [];
+  private exited: Promise<void> = Promise.resolve();
+  private resolveExited: (() => void) | null = null;
+
+  constructor(private readonly platform: NodeJS.Platform) {
+    super();
+  }
+
+  get isRunning(): boolean {
+    return !this.stopped && this.child !== null && !this.child.killed;
+  }
+
+  start(projectPath: string): void {
+    this.stopped = false;
+    this.connected = false;
+    this.reportedError = false;
+    this.queue = [];
+    this.exited = new Promise((resolve) => {
+      this.resolveExited = resolve;
+    });
+
+    const spawnSpec = buildCodexSpawnSpec(
+      projectPath,
+      this.platform,
+      CODEX_APP_SERVER_PROXY_ARGS,
+    );
+    const child = spawn(spawnSpec.command, spawnSpec.args, spawnSpec.options);
+    this.child = child;
+
+    const socket = new Duplex({
+      read() {},
+      write: (chunk, encoding, callback) => {
+        child.stdin.write(chunk, encoding, callback);
+      },
+      final: (callback) => {
+        child.stdin.end(callback);
+      },
+      destroy: (error, callback) => {
+        if (!child.killed) child.kill("SIGTERM");
+        callback(error);
+      },
+    });
+    socket.on("error", (err) => {
+      this.fail(err);
+    });
+    child.stdout.on("data", (chunk: Buffer) => {
+      socket.push(chunk);
+    });
+    child.stdout.on("end", () => {
+      socket.push(null);
+    });
+    child.stdout.on("error", (err) => {
+      socket.destroy(err);
+    });
+    child.stdin.on("error", (err) => {
+      socket.destroy(err);
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      const line = chunk.trim();
+      if (line) this.emit("log", line);
+    });
+
+    child.on("error", (err) => {
+      this.fail(err);
+      this.finishExit();
+    });
+    child.on("exit", (code) => {
+      this.finishExit(code ?? 0);
+    });
+
+    const createConnection = (() =>
+      socket) as unknown as typeof import("node:net").createConnection;
+    const ws = new WebSocket("ws://localhost/", {
+      createConnection,
+      handshakeTimeout: 15_000,
+      perMessageDeflate: false,
+    });
+    this.ws = ws;
+
+    ws.on("open", () => {
+      this.connected = true;
+      const queued = this.queue.splice(0);
+      for (const payload of queued) {
+        ws.send(payload);
+      }
+    });
+    ws.on("message", (data) => {
+      const text = data.toString();
+      this.emit("data", text.endsWith("\n") ? text : `${text}\n`);
+    });
+    ws.on("error", (err) => {
+      this.fail(err instanceof Error ? err : new Error(String(err)));
+    });
+    ws.on("close", () => {
+      this.connected = false;
+      this.ws = null;
+      if (!this.stopped && this.child && !this.child.killed) {
+        this.child.kill("SIGTERM");
+      }
+    });
+  }
+
+  write(envelope: Record<string, unknown>): void {
+    if (!this.isRunning) {
+      throw new Error("codex app-server is not running");
+    }
+    const payload = JSON.stringify(envelope);
+    if (this.connected && this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(payload);
+      return;
+    }
+    this.queue.push(payload);
+  }
+
+  stop(): void {
+    this.stopped = true;
+    this.connected = false;
+    this.queue = [];
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) ws.close();
+    const child = this.child;
+    this.child = null;
+    if (child && !child.killed) child.kill("SIGTERM");
+  }
+
+  override whenStopped(): Promise<void> {
+    return this.exited;
+  }
+
+  private fail(err: Error): void {
+    if (this.stopped || this.reportedError) return;
+    this.reportedError = true;
+    this.emit("error", err);
+  }
+
+  private finishExit(code = 0): void {
+    if (this.resolveExited === null) return;
+    this.stopped = true;
+    this.child = null;
+    this.connected = false;
+    this.queue = [];
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) ws.close();
+    const resolve = this.resolveExited;
+    this.resolveExited = null;
+    resolve();
+    this.emit("exit", code);
   }
 }
 
@@ -308,6 +485,10 @@ export function createCodexTransport(
       managedServers.set(url, manager);
     }
     return manager.createTransport(projectPath);
+  }
+  if (mode === "daemon") {
+    // Reuse the Codex CLI managed daemon without taking ownership of it.
+    return new DaemonCodexTransport(platform);
   }
   return new StdioCodexTransport(platform);
 }

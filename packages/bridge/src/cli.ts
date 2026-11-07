@@ -35,7 +35,8 @@ Options:
                          Public ws:// or wss:// URL used in QR codes
       --no-mdns         Disable mDNS auto-discovery advertisement
       --codex-app-server-mode <mode>
-                         Codex app-server mode: private, managed, or external
+                         Codex app-server mode: private, managed, external, or daemon
+                         (daemon reuses the default Codex CLI managed daemon)
       --codex-shared-app-server-url <url>
                          Shared Codex app-server ws:// URL
 

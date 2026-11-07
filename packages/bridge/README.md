@@ -46,7 +46,7 @@ ccpocket-bridge --version
 | `BRIDGE_ALLOWED_DIRS` | `$HOME` | Comma-separated list of project directories the Bridge may access; set exactly to `*` to allow any directory |
 | `BRIDGE_FILE_DOWNLOAD_ALLOW_ALL_PATHS` | unset (project only) | Set exactly to `1` to allow sharing/downloading any regular file readable by the Bridge process, including paths outside `BRIDGE_ALLOWED_DIRS`. Absolute and relative paths within the selected project work by default. |
 | `BRIDGE_PUBLIC_WS_URL` | (none) | Public `ws://` / `wss://` URL used for startup deep link and QR code |
-| `BRIDGE_CODEX_APP_SERVER_MODE` | `private` | Experimental Codex app-server mode: `private`, `managed`, or `external` |
+| `BRIDGE_CODEX_APP_SERVER_MODE` | `private` | Codex app-server mode: `private`, `managed`, `external`, or `daemon` |
 | `BRIDGE_CODEX_SHARED_APP_SERVER_URL` | `ws://127.0.0.1:8767` in `managed` mode | Experimental shared Codex app-server URL for Codex CLI co-presence |
 | `BRIDGE_CODEX_ASSIST_MODEL` | `gpt-5.6-luna` | Codex model used for auto-rename and commit-message assist calls |
 | `BRIDGE_CODEX_ASSIST_REASONING_EFFORT` | `none` | Reasoning effort used for Codex assist calls |
@@ -72,6 +72,12 @@ ccpocket-bridge --version
 | `AWS_REGION` / `AWS_PROFILE` | (none) | Bedrock region (required) and optional AWS credential profile read by Claude Code |
 | `OPENAI_API_KEY` | (none) | Codex API key; Codex can also use `~/.codex/auth.json` |
 | `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` | (none) | Proxy for outgoing fetch requests (`http://`, `https://`, `socks4://`, `socks5://`) |
+
+`daemon` reuses the default Codex CLI managed daemon through
+`codex app-server proxy`. The daemon control socket speaks WebSocket, so
+Bridge runs a WebSocket client over the proxy's stdio. Bridge does not start
+or stop the daemon; start it with `codex app-server daemon start` first if
+needed. This mode requires a Codex CLI build that provides `app-server proxy`.
 
 Lowercase proxy variables (`https_proxy`, `http_proxy`, `all_proxy`) are also
 supported. When `BRIDGE_PROMPT_HISTORY_FILE` is not set and `BRIDGE_PORT` is not
@@ -291,6 +297,9 @@ Modes:
   with Codex CLI.
 - `external`: Bridge connects to an already-running app-server. In this mode,
   `BRIDGE_CODEX_SHARED_APP_SERVER_URL` is required.
+- `daemon`: Bridge connects to the default Codex CLI managed daemon through
+  `codex app-server proxy`. The daemon must already be running, and the session
+  join command is `codex resume <thread-id>` without `--remote`.
 
 This is experimental and currently targets Codex CLI co-presence only. Codex App
 compatibility is not guaranteed and may use a different integration model in the

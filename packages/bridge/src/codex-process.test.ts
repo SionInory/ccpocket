@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,10 +13,19 @@ const { spawnMock, fakeChildren } = vi.hoisted(() => ({
 
 class FakeWritable extends EventEmitter {
   public writes: string[] = [];
-  write(chunk: string): boolean {
+  write(
+    chunk: string,
+    _encoding?: unknown,
+    callback?: () => void,
+  ): boolean {
     this.writes.push(chunk);
     this.emit("write", chunk);
+    callback?.();
     return true;
+  }
+
+  end(callback?: () => void): void {
+    callback?.();
   }
 }
 
@@ -1044,6 +1054,90 @@ describe("CodexProcess (app-server)", () => {
     );
 
     proc.stop();
+  });
+
+  it("reuses the default Codex daemon through app-server proxy", () => {
+    process.env.BRIDGE_CODEX_APP_SERVER_MODE = "daemon";
+
+    const proc = new CodexProcess("linux");
+    proc.start("/tmp/project-daemon");
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "codex",
+      ["app-server", "proxy"],
+      expect.objectContaining({ cwd: "/tmp/project-daemon" }),
+    );
+
+    proc.stop();
+  });
+
+  it("speaks WebSocket over the daemon proxy stdio", async () => {
+    process.env.BRIDGE_CODEX_APP_SERVER_MODE = "daemon";
+    spawnMock.mockImplementation(() => {
+      const child = new FakeChildProcess();
+      fakeChildren.push(child);
+      let upgraded = false;
+      let pending = Buffer.alloc(0);
+      child.stdin.on("write", (chunk: string | Buffer) => {
+        pending = Buffer.concat([
+          pending,
+          Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+        ]);
+        if (!upgraded) {
+          const headerEnd = pending.indexOf("\r\n\r\n");
+          if (headerEnd < 0) return;
+          const headers = pending.subarray(0, headerEnd).toString("latin1");
+          pending = pending.subarray(headerEnd + 4);
+          const key = /^sec-websocket-key:\s*(.+)$/im
+            .exec(headers)?.[1]
+            .trim();
+          if (!key) throw new Error("missing Sec-WebSocket-Key");
+          const accept = createHash("sha1")
+            .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+            .digest("base64");
+          child.stdout.emit(
+            "data",
+            Buffer.from(
+              "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\n" +
+                "Connection: Upgrade\r\n" +
+                `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
+            ),
+          );
+          upgraded = true;
+        }
+
+        for (;;) {
+          const frame = readClientWebSocketFrame(pending);
+          if (!frame) return;
+          pending = pending.subarray(frame.bytes);
+          if (frame.opcode !== 0x1) continue;
+          const envelope = JSON.parse(frame.text) as Record<string, unknown>;
+          if (envelope.method !== "initialize") continue;
+          child.stdout.emit(
+            "data",
+            encodeServerTextFrame(
+              JSON.stringify({
+                id: envelope.id,
+                result: {
+                  userAgent:
+                    "codex-tui/0.167.0 (Windows 10.0.26200; x86_64) test",
+                },
+              }),
+            ),
+          );
+        }
+      });
+      return child;
+    });
+
+    const proc = new CodexProcess("linux");
+    try {
+      await proc.initializeOnly("/tmp/project-daemon-websocket", 2_000);
+    } finally {
+      proc.stop();
+      await proc.waitForShutdown(1_000);
+    }
   });
 
   it("returns a clear error when Codex CLI is not installed", () => {
@@ -2190,6 +2284,24 @@ describe("CodexProcess (app-server)", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       "cmd.exe",
       ["/d", "/s", "/c", "codex app-server --listen stdio://"],
+      expect.objectContaining({
+        cwd: "D:\\Users\\alice\\repo",
+        windowsVerbatimArguments: true,
+      }),
+    );
+
+    proc.stop();
+  });
+
+  it("uses cmd.exe to launch the Codex daemon proxy on Windows", () => {
+    process.env.BRIDGE_CODEX_APP_SERVER_MODE = "daemon";
+    const proc = new CodexProcess("win32");
+
+    proc.start("D:\\Users\\alice\\repo");
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "cmd.exe",
+      ["/d", "/s", "/c", "codex app-server proxy"],
       expect.objectContaining({
         cwd: "D:\\Users\\alice\\repo",
         windowsVerbatimArguments: true,
@@ -5427,6 +5539,52 @@ function nextOutgoingRequest(child: FakeChildProcess): Record<string, unknown> {
     child,
     (value) => typeof value.method === "string" && value.id !== undefined,
   );
+}
+
+function readClientWebSocketFrame(
+  buffer: Buffer,
+): { opcode: number; text: string; bytes: number } | null {
+  if (buffer.length < 6) return null;
+  const opcode = buffer[0]! & 0x0f;
+  const masked = (buffer[1]! & 0x80) !== 0;
+  let length = buffer[1]! & 0x7f;
+  let offset = 2;
+  if (length === 126) {
+    if (buffer.length < 4) return null;
+    length = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (length === 127) {
+    throw new Error("test frame exceeds supported length");
+  }
+  if (masked) {
+    if (buffer.length < offset + 4) return null;
+    offset += 4;
+  }
+  if (buffer.length < offset + length) return null;
+  const payload = Buffer.from(buffer.subarray(offset, offset + length));
+  if (masked) {
+    const mask = buffer.subarray(offset - 4, offset);
+    for (let index = 0; index < payload.length; index++) {
+      payload[index]! ^= mask[index % 4]!;
+    }
+  }
+  return {
+    opcode,
+    text: payload.toString("utf8"),
+    bytes: offset + length,
+  };
+}
+
+function encodeServerTextFrame(text: string): Buffer {
+  const payload = Buffer.from(text, "utf8");
+  if (payload.length < 126) {
+    return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
+  }
+  const header = Buffer.alloc(4);
+  header[0] = 0x81;
+  header[1] = 126;
+  header.writeUInt16BE(payload.length, 2);
+  return Buffer.concat([header, payload]);
 }
 
 /** Consume and reply to the background skills/list request that fires after thread/start. */

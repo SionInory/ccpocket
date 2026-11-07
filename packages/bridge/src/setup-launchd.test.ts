@@ -203,6 +203,15 @@ describe("setup-launchd", () => {
       expect(content).toContain("<string>ws://127.0.0.1:8767</string>");
     });
 
+    it("persists daemon mode without a shared app-server URL", () => {
+      setupLaunchd({ codexAppServerMode: "daemon" });
+
+      const content = mockWriteFileSync.mock.calls[0]![1] as string;
+      expect(content).toContain("<key>BRIDGE_CODEX_APP_SERVER_MODE</key>");
+      expect(content).toContain("<string>daemon</string>");
+      expect(content).not.toContain("BRIDGE_CODEX_SHARED_APP_SERVER_URL");
+    });
+
     it("moves the default shared app-server URL when Bridge uses 8767", () => {
       setupLaunchd({ port: "8767", codexAppServerMode: "managed" });
 

@@ -245,6 +245,16 @@ describe("setup-systemd", () => {
       );
     });
 
+    it("persists daemon mode without a shared app-server URL", () => {
+      setupSystemd({ codexAppServerMode: "daemon" });
+
+      const content = mockWriteFileSync.mock.calls[0]![1] as string;
+      expect(content).toContain(
+        "Environment=BRIDGE_CODEX_APP_SERVER_MODE=daemon",
+      );
+      expect(content).not.toContain("BRIDGE_CODEX_SHARED_APP_SERVER_URL");
+    });
+
     it("moves the default shared app-server URL when Bridge uses 8767", () => {
       setupSystemd({ port: "8767", codexAppServerMode: "managed" });
 
