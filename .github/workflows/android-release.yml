@@ -10,7 +10,39 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: apps/mobile/android/netbird/go.sum
+      - name: Read Flutter version from .mise.toml
+        id: mise
+        run: |
+          version=$(sed -n 's/^flutter = "\([^"]*\)"/\1/p' .mise.toml)
+          test -n "$version"
+          echo "flutter_version=$version" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ steps.mise.outputs.flutter_version }}
+          cache: true
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Generate localizations
+        working-directory: apps/mobile
+        run: flutter gen-l10n
+      - name: Test Netbird proxy
+        working-directory: apps/mobile/android/netbird
+        run: go test ./...
+      - name: Test Flutter app
+        working-directory: apps/mobile
+        run: flutter test
+
+  release:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,9 +130,6 @@ jobs:
       - name: Generate localizations
         working-directory: apps/mobile
         run: flutter gen-l10n
-      - name: Test Netbird proxy
-        working-directory: apps/mobile/android/netbird
-        run: go test ./...
       - name: Build Netbird AAR
         working-directory: apps/mobile/android/netbird
         run: |
@@ -111,9 +140,6 @@ jobs:
             -javapkg=com.nb.ccpocket \
             -o ../app/libs/netbird.aar \
             .
-      - name: Test Flutter app
-        working-directory: apps/mobile
-        run: flutter test
       - name: Build signed APK
         working-directory: apps/mobile
         run: flutter build apk --release --target-platform android-arm64
