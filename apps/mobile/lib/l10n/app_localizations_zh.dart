@@ -2106,6 +2106,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get textDensityDescription => '在系统文字大小的基础上再应用此应用倍率。100% 保持系统设置不变。';
 
   @override
+  String get multiPaneBreakpoint => '分栏显示宽度';
+
+  @override
+  String multiPaneBreakpointDescription(int threePaneWidth) {
+    return '窗口宽度不小于此值时，会话列表与对话并排显示。宽度小于 ${threePaneWidth}pt 时打开工具，会显示在列表的位置。';
+  }
+
+  @override
+  String multiPaneBreakpointCurrentSplit(int width) {
+    return '当前宽度 ${width}pt · 分栏显示';
+  }
+
+  @override
+  String multiPaneBreakpointCurrentSingle(int width) {
+    return '当前宽度 ${width}pt · 单栏显示';
+  }
+
+  @override
+  String multiPaneBreakpointMatchCurrent(int width) {
+    return '按当前宽度分栏（${width}pt）';
+  }
+
+  @override
+  String multiPaneBreakpointReset(int width) {
+    return '恢复默认（${width}pt）';
+  }
+
+  @override
   String get codeFontSize => '代码字体大小';
 
   @override
@@ -3656,4 +3684,51 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get recentFavoriteTooltip => '收藏';
+
+  @override
+  String get contextCompactionTitle => '上下文已压缩';
+
+  @override
+  String get contextCompactionManual => '手动';
+
+  @override
+  String get contextCompactionAuto => '自动';
+
+  @override
+  String contextCompactionTokens(String before, String after) {
+    return '$before → $after tokens';
+  }
+
+  @override
+  String get contextCompactionShowSummary => '显示摘要';
+
+  @override
+  String get contextCompactionHideSummary => '隐藏摘要';
+
+  @override
+  String get contextCompactionOpenTranscript => '查看之前的消息';
+
+  @override
+  String get contextCompactionInProgress => '正在压缩上下文…';
+
+  @override
+  String get olderHistoryTitle => '之前的消息';
+
+  @override
+  String get olderHistoryDescription => '较早的消息未在此显示';
+
+  @override
+  String get transcriptTitle => '之前的消息';
+
+  @override
+  String get transcriptLoadOlder => '加载更早的消息';
+
+  @override
+  String get transcriptEmpty => '没有可显示的消息';
+
+  @override
+  String get transcriptLoadFailed => '无法加载消息';
+
+  @override
+  String get transcriptBridgeUpdate => '需要更新 Bridge 才能查看之前的消息。';
 }

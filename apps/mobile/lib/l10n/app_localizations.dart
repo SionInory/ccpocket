@@ -4049,6 +4049,42 @@ abstract class AppLocalizations {
   /// **'OSの文字サイズ設定に、このアプリ倍率をさらに掛けます。100%はOS設定のままです。'**
   String get textDensityDescription;
 
+  /// No description provided for @multiPaneBreakpoint.
+  ///
+  /// In ja, this message translates to:
+  /// **'分割表示の幅'**
+  String get multiPaneBreakpoint;
+
+  /// No description provided for @multiPaneBreakpointDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'ウィンドウの幅がこの値以上のとき、セッション一覧と会話を並べて表示します。{threePaneWidth}pt未満でツールを開くと、一覧の位置に表示されます。'**
+  String multiPaneBreakpointDescription(int threePaneWidth);
+
+  /// No description provided for @multiPaneBreakpointCurrentSplit.
+  ///
+  /// In ja, this message translates to:
+  /// **'現在の幅 {width}pt · 分割表示'**
+  String multiPaneBreakpointCurrentSplit(int width);
+
+  /// No description provided for @multiPaneBreakpointCurrentSingle.
+  ///
+  /// In ja, this message translates to:
+  /// **'現在の幅 {width}pt · 1画面表示'**
+  String multiPaneBreakpointCurrentSingle(int width);
+
+  /// No description provided for @multiPaneBreakpointMatchCurrent.
+  ///
+  /// In ja, this message translates to:
+  /// **'現在の幅で分割（{width}pt）'**
+  String multiPaneBreakpointMatchCurrent(int width);
+
+  /// No description provided for @multiPaneBreakpointReset.
+  ///
+  /// In ja, this message translates to:
+  /// **'デフォルト（{width}pt）に戻す'**
+  String multiPaneBreakpointReset(int width);
+
   /// No description provided for @codeFontSize.
   ///
   /// In ja, this message translates to:
@@ -6952,6 +6988,96 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'お気に入り'**
   String get recentFavoriteTooltip;
+
+  /// No description provided for @contextCompactionTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'コンテキストを圧縮しました'**
+  String get contextCompactionTitle;
+
+  /// No description provided for @contextCompactionManual.
+  ///
+  /// In ja, this message translates to:
+  /// **'手動'**
+  String get contextCompactionManual;
+
+  /// No description provided for @contextCompactionAuto.
+  ///
+  /// In ja, this message translates to:
+  /// **'自動'**
+  String get contextCompactionAuto;
+
+  /// No description provided for @contextCompactionTokens.
+  ///
+  /// In ja, this message translates to:
+  /// **'{before} → {after} tokens'**
+  String contextCompactionTokens(String before, String after);
+
+  /// No description provided for @contextCompactionShowSummary.
+  ///
+  /// In ja, this message translates to:
+  /// **'要約を表示'**
+  String get contextCompactionShowSummary;
+
+  /// No description provided for @contextCompactionHideSummary.
+  ///
+  /// In ja, this message translates to:
+  /// **'要約を隠す'**
+  String get contextCompactionHideSummary;
+
+  /// No description provided for @contextCompactionOpenTranscript.
+  ///
+  /// In ja, this message translates to:
+  /// **'以前のやり取りを見る'**
+  String get contextCompactionOpenTranscript;
+
+  /// No description provided for @contextCompactionInProgress.
+  ///
+  /// In ja, this message translates to:
+  /// **'コンテキストを圧縮中…'**
+  String get contextCompactionInProgress;
+
+  /// No description provided for @olderHistoryTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'以前のやり取り'**
+  String get olderHistoryTitle;
+
+  /// No description provided for @olderHistoryDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'古いメッセージはここでは省略しています'**
+  String get olderHistoryDescription;
+
+  /// No description provided for @transcriptTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'以前のやり取り'**
+  String get transcriptTitle;
+
+  /// No description provided for @transcriptLoadOlder.
+  ///
+  /// In ja, this message translates to:
+  /// **'さらに古いメッセージを読み込む'**
+  String get transcriptLoadOlder;
+
+  /// No description provided for @transcriptEmpty.
+  ///
+  /// In ja, this message translates to:
+  /// **'表示できるメッセージがありません'**
+  String get transcriptEmpty;
+
+  /// No description provided for @transcriptLoadFailed.
+  ///
+  /// In ja, this message translates to:
+  /// **'メッセージを読み込めませんでした'**
+  String get transcriptLoadFailed;
+
+  /// No description provided for @transcriptBridgeUpdate.
+  ///
+  /// In ja, this message translates to:
+  /// **'以前のやり取りを表示するにはBridgeの更新が必要です。'**
+  String get transcriptBridgeUpdate;
 }
 
 class _AppLocalizationsDelegate

@@ -2217,6 +2217,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'Multiplies the system text size by this app scale. 100% keeps the OS setting unchanged.';
 
   @override
+  String get multiPaneBreakpoint => 'Split view width';
+
+  @override
+  String multiPaneBreakpointDescription(int threePaneWidth) {
+    return 'When the window is at least this wide, the session list and conversation appear side by side. Below ${threePaneWidth}pt, an opened tool takes the list\'s place.';
+  }
+
+  @override
+  String multiPaneBreakpointCurrentSplit(int width) {
+    return 'Current width ${width}pt · Split view';
+  }
+
+  @override
+  String multiPaneBreakpointCurrentSingle(int width) {
+    return 'Current width ${width}pt · Single view';
+  }
+
+  @override
+  String multiPaneBreakpointMatchCurrent(int width) {
+    return 'Split at current width (${width}pt)';
+  }
+
+  @override
+  String multiPaneBreakpointReset(int width) {
+    return 'Reset to default (${width}pt)';
+  }
+
+  @override
   String get codeFontSize => 'Code font size';
 
   @override
@@ -3844,4 +3872,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get recentFavoriteTooltip => 'Favorite';
+
+  @override
+  String get contextCompactionTitle => 'Context compacted';
+
+  @override
+  String get contextCompactionManual => 'Manual';
+
+  @override
+  String get contextCompactionAuto => 'Auto';
+
+  @override
+  String contextCompactionTokens(String before, String after) {
+    return '$before → $after tokens';
+  }
+
+  @override
+  String get contextCompactionShowSummary => 'Show summary';
+
+  @override
+  String get contextCompactionHideSummary => 'Hide summary';
+
+  @override
+  String get contextCompactionOpenTranscript => 'View earlier messages';
+
+  @override
+  String get contextCompactionInProgress => 'Compacting context…';
+
+  @override
+  String get olderHistoryTitle => 'Earlier messages';
+
+  @override
+  String get olderHistoryDescription => 'Older messages are not shown here';
+
+  @override
+  String get transcriptTitle => 'Earlier messages';
+
+  @override
+  String get transcriptLoadOlder => 'Load older messages';
+
+  @override
+  String get transcriptEmpty => 'No messages to show';
+
+  @override
+  String get transcriptLoadFailed => 'Couldn\'t load messages';
+
+  @override
+  String get transcriptBridgeUpdate =>
+      'Update Bridge to view earlier messages.';
 }

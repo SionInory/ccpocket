@@ -2134,6 +2134,34 @@ class AppLocalizationsJa extends AppLocalizations {
       'OSの文字サイズ設定に、このアプリ倍率をさらに掛けます。100%はOS設定のままです。';
 
   @override
+  String get multiPaneBreakpoint => '分割表示の幅';
+
+  @override
+  String multiPaneBreakpointDescription(int threePaneWidth) {
+    return 'ウィンドウの幅がこの値以上のとき、セッション一覧と会話を並べて表示します。${threePaneWidth}pt未満でツールを開くと、一覧の位置に表示されます。';
+  }
+
+  @override
+  String multiPaneBreakpointCurrentSplit(int width) {
+    return '現在の幅 ${width}pt · 分割表示';
+  }
+
+  @override
+  String multiPaneBreakpointCurrentSingle(int width) {
+    return '現在の幅 ${width}pt · 1画面表示';
+  }
+
+  @override
+  String multiPaneBreakpointMatchCurrent(int width) {
+    return '現在の幅で分割（${width}pt）';
+  }
+
+  @override
+  String multiPaneBreakpointReset(int width) {
+    return 'デフォルト（${width}pt）に戻す';
+  }
+
+  @override
   String get codeFontSize => 'コード文字サイズ';
 
   @override
@@ -3699,4 +3727,51 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get recentFavoriteTooltip => 'お気に入り';
+
+  @override
+  String get contextCompactionTitle => 'コンテキストを圧縮しました';
+
+  @override
+  String get contextCompactionManual => '手動';
+
+  @override
+  String get contextCompactionAuto => '自動';
+
+  @override
+  String contextCompactionTokens(String before, String after) {
+    return '$before → $after tokens';
+  }
+
+  @override
+  String get contextCompactionShowSummary => '要約を表示';
+
+  @override
+  String get contextCompactionHideSummary => '要約を隠す';
+
+  @override
+  String get contextCompactionOpenTranscript => '以前のやり取りを見る';
+
+  @override
+  String get contextCompactionInProgress => 'コンテキストを圧縮中…';
+
+  @override
+  String get olderHistoryTitle => '以前のやり取り';
+
+  @override
+  String get olderHistoryDescription => '古いメッセージはここでは省略しています';
+
+  @override
+  String get transcriptTitle => '以前のやり取り';
+
+  @override
+  String get transcriptLoadOlder => 'さらに古いメッセージを読み込む';
+
+  @override
+  String get transcriptEmpty => '表示できるメッセージがありません';
+
+  @override
+  String get transcriptLoadFailed => 'メッセージを読み込めませんでした';
+
+  @override
+  String get transcriptBridgeUpdate => '以前のやり取りを表示するにはBridgeの更新が必要です。';
 }
