@@ -134,10 +134,11 @@ jobs:
         working-directory: apps/mobile/android/netbird
         run: |
           mkdir -p ../app/libs
-          gomobile bind \
+          CGO_ENABLED=0 gomobile bind \
             -target=android/arm64 \
             -androidapi 24 \
             -javapkg=com.nb.ccpocket \
+            -ldflags="-linkmode=external -extldflags=-Wl,-z,max-page-size=16384 -checklinkname=0" \
             -o ../app/libs/netbird.aar \
             .
       - name: Build signed APK
