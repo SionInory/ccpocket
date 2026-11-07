@@ -10,7 +10,7 @@ const PLATFORM_CONFIG = {
   ios: { tagPrefix: 'ios', workflow: 'iOS Release (Shorebird)' },
   android: {
     tagPrefix: 'android',
-    workflow: 'Android Release (Shorebird)',
+    workflow: 'Android Release',
   },
   macos: { tagPrefix: 'macos', workflow: 'macOS Release' },
   linux: { tagPrefix: 'linux', workflow: 'Linux Release' },

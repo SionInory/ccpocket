@@ -1,35 +1,24 @@
-name: Android Release (Shorebird)
+name: Android Release
+
 on:
   push:
     tags:
       - 'android/v*'
-  workflow_dispatch: {}
 
 permissions:
-  actions: read
   contents: write
 
 jobs:
-  test-gate:
-    uses: ./.github/workflows/app-release-test-gate.yml
-    with:
-      release_sha: ${{ github.sha }}
-
-  release:
-    needs: test-gate
-    # Quality checks run once in the Test workflow and are enforced by test-gate.
+  build:
     runs-on: ubuntu-latest
-    env:
-      SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
-      REVENUECAT_PUBLIC_KEY: ${{ secrets.REVENUECAT_PUBLIC_KEY_ANDROID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Read Flutter version from .mise.toml
         id: mise
-        run: echo "flutter_version=$(grep 'flutter' .mise.toml | sed 's/.*= *\"//' | sed 's/\"//')" >> "$GITHUB_OUTPUT"
-      - uses: shorebirdtech/setup-shorebird@8b1059ddb56a926f0146edf4133cc647775c162f # v1.4.1
-        with:
-          cache: true
+        run: |
+          version=$(sed -n 's/^flutter = "\([^"]*\)"/\1/p' .mise.toml)
+          test -n "$version"
+          echo "flutter_version=$version" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ steps.mise.outputs.flutter_version }}
@@ -44,71 +33,53 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null
           "$SDKMANAGER" "ndk;29.0.13846066"
-      - uses: gradle/gradle-build-action@ac2d340dc04d9e1113182899e983b5400c17cda1 # v3.5.0
-      # Android signing: decode keystore from base64 secret
-      - name: Setup Android signing
+      - name: Generate signing key
+        env:
+          SIGNING_PASSWORD: ccpocket-ci
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > apps/mobile/android/keystore.jks
-          cat > apps/mobile/android/keystore.properties << EOF
-          storeFile=${{ github.workspace }}/apps/mobile/android/keystore.jks
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          EOF
-      - name: Setup Firebase config
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > apps/mobile/android/app/google-services.json
-      - name: Use precompiled Rust artifacts for Shorebird
-        run: |
-          printf '%s\n' 'use_precompiled_binaries: true' > apps/mobile/cargokit_options.yaml
-      - run: flutter pub get
-        working-directory: apps/mobile
-      - name: Shorebird Release Android
-        working-directory: apps/mobile
-        # --no-tree-shake-icons: Prevent MaterialIcons-Regular.otf from changing
-        # between release and patch builds, which causes Shorebird asset diff warnings
-        # and prevents patches from being applied on devices.
-        # TODO: Remove once Shorebird supports asset patching (https://github.com/shorebirdtech/shorebird/issues/318)
-        run: |
-          shorebird release android \
-            --flutter-version="${{ steps.mise.outputs.flutter_version }}" \
-            -- \
-            --dart-define=REVENUECAT_PUBLIC_KEY="${REVENUECAT_PUBLIC_KEY}" \
-            --no-tree-shake-icons
-      - name: Upload to Google Play
-        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_CREDENTIALS }}
-          packageName: com.k9i.ccpocket
-          releaseFiles: apps/mobile/build/app/outputs/bundle/release/*.aab
-          track: internal
-          status: draft
-          # Play rejects changesNotSentForReview=true for this internal draft.
-          changesNotSentForReview: false
-
-      # GitHub Release (only when triggered by tag push)
-      - name: Extract version from tag
-        if: startsWith(github.ref, 'refs/tags/')
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#android/v}" >> "$GITHUB_OUTPUT"
-      - name: Extract changelog section
-        if: startsWith(github.ref, 'refs/tags/')
-        id: changelog
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SEMVER="${VERSION%%+*}"
-          NOTES=$(awk "/^## \\[${SEMVER}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          # The key changes on every run, so these APKs cannot update each other in place.
+          keytool -genkeypair \
+            -keystore "$RUNNER_TEMP/ccpocket-ci.jks" \
+            -storetype PKCS12 \
+            -storepass "$SIGNING_PASSWORD" \
+            -keypass "$SIGNING_PASSWORD" \
+            -alias ccpocket \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 10000 \
+            -dname "CN=ccpocket CI, O=ccpocket, C=CN" \
+            -noprompt
           {
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+            printf 'storeFile=%s\n' "$RUNNER_TEMP/ccpocket-ci.jks"
+            printf 'storePassword=%s\n' "$SIGNING_PASSWORD"
+            printf 'keyAlias=ccpocket\n'
+            printf 'keyPassword=%s\n' "$SIGNING_PASSWORD"
+          } > apps/mobile/android/keystore.properties
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Build signed APK
+        working-directory: apps/mobile
+        run: flutter build apk --release
+      - name: Verify APK signature
+        run: |
+          apk=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          test -f "$apk"
+          apksigner=$(find "${ANDROID_HOME:?}/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -x "$apksigner"
+          "$apksigner" verify --print-certs "$apk"
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
         run: |
-          printf '%s\n' "$RELEASE_NOTES" > /tmp/release_notes.md
-          gh release create "$GITHUB_REF_NAME" \
-            --title "Android ${{ steps.version.outputs.version }}" \
-            --notes-file /tmp/release_notes.md
+          version="${GITHUB_REF_NAME#android/v}"
+          asset="ccpocket-android-${version}.apk"
+          cp apps/mobile/build/app/outputs/flutter-apk/app-release.apk "$asset"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" \
+              --verify-tag \
+              --title "Android $version" \
+              --generate-notes
+          fi
