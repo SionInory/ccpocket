@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: apps/mobile/android/netbird/go.sum
       - name: Resolve release tag
         id: release
         env:
@@ -59,6 +63,13 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null
           "$SDKMANAGER" "ndk;29.0.13846066"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.13846066" >> "$GITHUB_ENV"
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260816165457-f98cc9b3c733
+          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260816165457-f98cc9b3c733
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          test -x "$(go env GOPATH)/bin/gobind"
       - name: Generate signing key
         env:
           SIGNING_PASSWORD: ccpocket-ci
@@ -84,9 +95,64 @@ jobs:
       - name: Install dependencies
         working-directory: apps/mobile
         run: flutter pub get
+      - name: Generate localizations
+        working-directory: apps/mobile
+        run: flutter gen-l10n
+      - name: Test Netbird proxy
+        working-directory: apps/mobile/android/netbird
+        run: go test ./...
+      - name: Build Netbird AAR
+        working-directory: apps/mobile/android/netbird
+        run: |
+          mkdir -p ../app/libs
+          gomobile bind \
+            -target=android/arm64 \
+            -androidapi 24 \
+            -javapkg=com.nb.ccpocket \
+            -o ../app/libs/netbird.aar \
+            .
+      - name: Test Flutter app
+        working-directory: apps/mobile
+        run: flutter test
       - name: Build signed APK
         working-directory: apps/mobile
-        run: flutter build apk --release
+        run: flutter build apk --release --target-platform android-arm64
+      - name: Verify application ID
+        run: |
+          apk=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          test -f "$apk"
+          aapt=$(find "${ANDROID_HOME:?}/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          test -x "$aapt"
+          package_id=$("$aapt" dump badging "$apk" | awk -F"'" '/^package: name=/{ print $2; exit }')
+          printf 'Application ID: %s\n' "$package_id"
+          test "$package_id" = "com.nb.ccpocket"
+      - name: Verify APK contains only arm64
+        run: |
+          apk=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          test -f "$apk"
+          abis=$(unzip -Z1 "$apk" | awk -F/ '$1 == "lib" && NF > 1 { print $2 }' | sort -u)
+          printf 'APK ABIs:\n%s\n' "$abis"
+          test "$abis" = "arm64-v8a"
+      - name: Verify 16 KB page alignment
+        run: |
+          apk=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          test -f "$apk"
+          zipalign=$(find "${ANDROID_HOME:?}/build-tools" -type f -name zipalign | sort -V | tail -n 1)
+          test -x "$zipalign"
+          "$zipalign" -c -P 16 -v 4 "$apk" > /dev/null
+
+          readelf="${ANDROID_NDK_HOME:?}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          test -x "$readelf"
+          tmp=$(mktemp -d)
+          unzip -q "$apk" 'lib/arm64-v8a/*.so' -d "$tmp"
+          for so in "$tmp"/lib/arm64-v8a/*.so; do
+            for alignment in $("$readelf" -l "$so" | awk '$1 == "LOAD" { print $NF }'); do
+              test $((alignment)) -ge 16384 || {
+                echo "::error::$so has a LOAD segment aligned below 16 KB"
+                exit 1
+              }
+            done
+          done
       - name: Verify APK signature
         run: |
           apk=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
@@ -101,18 +167,18 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
           TAG_EXISTS: ${{ steps.release.outputs.tag_exists }}
         run: |
-          asset="ccpocket-android-${VERSION}.apk"
+          asset="ccpocket-android-arm64-${VERSION}.apk"
           cp apps/mobile/build/app/outputs/flutter-apk/app-release.apk "$asset"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$asset" --clobber
           elif [ "$TAG_EXISTS" = "true" ]; then
             gh release create "$TAG" "$asset" \
               --verify-tag \
-              --title "Android $VERSION" \
+              --title "Android ARM64 $VERSION" \
               --generate-notes
           else
             gh release create "$TAG" "$asset" \
               --target "$GITHUB_SHA" \
-              --title "Android $VERSION" \
+              --title "Android ARM64 $VERSION" \
               --generate-notes
           fi
