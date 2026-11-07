@@ -4,6 +4,7 @@
 
 - 只改 Android 客户端。
 - 整个 App 共用一条 Netbird 连接，不按 Bridge 机器分别配置。
+- Android 发布包名使用 `com.nb.ccpocket`。
 - 不启用系统 VPN，不创建 `VpnService`，不申请 `BIND_VPN_SERVICE`。
 - 设置中新增 `Netbird` 项，保存并开启后，App 启动与回到前台时自动恢复连接。
 - Setup Key 仅在首次启用、以及清除 Netbird 登录后再次启用时弹窗输入。
@@ -23,9 +24,9 @@
 - `embed.New` 会强制设置 `NB_NETSTACK_SKIP_PROXY=true`，内置 SOCKS5 不会启动。
 - 因此由 Go 侧自建仅监听 `127.0.0.1` 的 HTTP 代理：
   - 支持普通 HTTP 请求；
-  - 支持 `CONNECT`；
   - 支持 WebSocket Upgrade；
   - 目标连接全部通过 `Client.Dial` 进入 Netbird 网络。
+- 代理路径使用 `/t/<base64url-origin>/<path>` 携带目标地址，避免本地代理在多个 Bridge 之间串流。
 - Bridge HTTP/WS、健康检查、版本检查、上传下载、图片与媒体统一走该本地代理，避免逐页改造。
 
 ### 暂不采用
@@ -47,12 +48,11 @@
   - `stop()`
   - `status()`
   - `proxyPort()`
-  - `setHttpTarget(baseUrl)`
 - Go 内部：
   - `embed.Client` 启动 userspace tunnel；
   - 监听 `127.0.0.1:0`；
-  - 当前 Bridge HTTP base 作为本地反向代理目标；
-  - HTTP 代理负责转发与隧道拨号。
+  - `httputil.ReverseProxy` 根据路径中的目标 origin 转发 HTTP/WebSocket；
+  - 代理拨号全部使用 `embed.Client.DialContext`。
 - 保留 Netbird BSD-3-Clause 许可声明。
 
 ### Kotlin
@@ -67,7 +67,7 @@
 - 设置项状态与连接状态分离：
   - 开关表示“是否启用”；
   - 状态表示“未连接 / 连接中 / 已连接 / 失败”；
-  - 只有明确处于 `connected` 才视为加密隧道可用。
+  - 只有管理连接和信号连接都成功，且本地代理端口可用时，才视为 `connected`。
 - 接入点：
   - `BridgeService` 的 WebSocket `channelFactory`；
   - `BridgeService.httpBaseUrl`；
@@ -91,7 +91,7 @@
 - 清除登录：
   - 停止隧道；
   - 删除 Setup Key；
-  - 清理 Netbird config/state；
+  - 清空整个 Netbird 配置目录并重新创建；
   - 下次启用时重新弹窗。
 - 连接失败展示中文原因，并允许重试或清除登录。
 - 隧道已连接时不显示“WS 不安全”确认弹窗。
@@ -103,12 +103,13 @@
 1. 安装 Go 与 gomobile。
 2. 运行 Flutter/Dart 测试。
 3. 运行 Go 代理测试。
-4. 只构建 `android/arm64` AAR。
+4. 只构建 `android/arm64` AAR，Java 包名为 `com.nb.ccpocket.netbird`。
 5. `flutter build apk --release --target-platform android-arm64`。
-6. 检查 APK 仅含 `arm64-v8a`。
-7. 检查 16 KB page alignment。
-8. 验证 APK 签名。
-9. Release 只上传 `ccpocket-android-arm64-${VERSION}.apk`。
+6. 检查 APK 的 applicationId 为 `com.nb.ccpocket`。
+7. 检查 APK 仅含 `arm64-v8a`。
+8. 检查 16 KB page alignment。
+9. 验证 APK 签名。
+10. Release 只上传 `ccpocket-android-arm64-${VERSION}.apk`。
 
 现有手动触发能力保留：
 
@@ -119,10 +120,10 @@
 
 ## 验证门槛
 
-- CI 是唯一构建与测试环境。
+- GitHub Actions 是唯一构建与测试环境，本地只做静态差异检查。
 - 第一硬门槛：Netbird `client/embed` + gomobile 能否稳定编译到 Android AAR。
 - 若编译失败，报告真实错误，不伪造“已支持”。
-- CI 通过后再提交、推送。
+- 提交并推送后触发 Actions，根据真实日志迭代。
 
 ## 风险
 

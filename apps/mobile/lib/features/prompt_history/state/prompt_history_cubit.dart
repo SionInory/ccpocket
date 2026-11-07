@@ -34,10 +34,11 @@ class PromptHistoryCubit extends Cubit<PromptHistoryState> {
 
     try {
       final bridge = _bridgeService;
-      if (syncFirst && bridge != null && bridge.lastUrl != null) {
-        final bridgeUrl = bridge.lastUrl!;
+      final bridgeUrl = bridge?.lastTransportUrl ?? bridge?.lastUrl;
+      if (syncFirst && bridge != null && bridgeUrl != null) {
         final bridgeId =
-            bridge.promptHistoryBridgeId ?? _service.bridgeIdForUrl(bridgeUrl);
+            bridge.promptHistoryBridgeId ??
+            _service.bridgeIdForUrl(bridge.lastUrl);
         if (bridgeId != null) {
           await _service.syncBridge(
             PromptHistorySyncTarget(

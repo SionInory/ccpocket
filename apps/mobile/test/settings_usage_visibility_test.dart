@@ -2082,6 +2082,7 @@ void main() {
         'local_url',
         'bridge_update',
         'prompt_history',
+        'netbird',
         'push_notifications',
         'push_privacy',
         'notification_language',

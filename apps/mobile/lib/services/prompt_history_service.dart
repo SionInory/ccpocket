@@ -17,6 +17,7 @@ import '../utils/network_endpoint.dart';
 import 'bridge_service.dart';
 import 'database_service.dart';
 import 'machine_manager_service.dart';
+import 'netbird_tunnel_service.dart';
 
 String _maxIso(String left, String right) =>
     left.compareTo(right) >= 0 ? left : right;
@@ -340,7 +341,8 @@ class PromptHistoryService {
 
   String? bridgeIdForUrl(String? url) {
     if (url == null || url.isEmpty) return null;
-    final uri = Uri.tryParse(url);
+    final uri =
+        NetbirdTunnelService.originalOriginOf(url) ?? Uri.tryParse(url);
     if (uri == null || uri.host.isEmpty) return null;
     final port = uri.hasPort
         ? uri.port
@@ -422,12 +424,13 @@ class PromptHistoryService {
     }
 
     final currentUrl = bridgeService?.lastUrl;
+    final currentTransportUrl = bridgeService?.lastTransportUrl ?? currentUrl;
     final currentBridgeId = bridgeIdForUrl(currentUrl);
-    if (currentUrl != null && currentBridgeId != null) {
+    if (currentTransportUrl != null && currentBridgeId != null) {
       addTarget(
         PromptHistorySyncTarget(
           bridgeId: currentBridgeId,
-          bridgeUrl: currentUrl,
+          bridgeUrl: currentTransportUrl,
           bridgeName: currentBridgeId,
         ),
       );

@@ -1,4 +1,4 @@
-package com.k9i.ccpocket
+package com.nb.ccpocket
 
 import android.app.Activity
 import android.app.ActivityManager

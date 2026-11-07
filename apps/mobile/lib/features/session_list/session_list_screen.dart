@@ -25,6 +25,7 @@ import '../../services/bridge_endpoint_probe.dart';
 import '../../services/bridge_service.dart';
 import '../../services/connect_deep_link_scope.dart';
 import '../../services/connection_url_parser.dart';
+import '../../services/netbird_tunnel_service.dart';
 import '../../services/platform_environment_service.dart';
 import '../../services/server_discovery_service.dart';
 import '../../services/ssh_bridge_tunnel_service.dart';
@@ -546,6 +547,7 @@ class _SessionListScreenState extends State<SessionListScreen>
     if (url.isEmpty) return;
     if (!mounted) return;
     final machineManagerCubit = context.read<MachineManagerCubit?>();
+    final netbirdTunnel = context.read<NetbirdTunnelService?>();
     final hasExplicitScheme =
         url.startsWith('ws://') || url.startsWith('wss://');
     var connectionMode =
@@ -573,7 +575,9 @@ class _SessionListScreenState extends State<SessionListScreen>
                 ? BridgeConnectionMode.secureOnly
                 : BridgeConnectionMode.automatic,
         };
-        final probe = await BridgeEndpointProbe().probe(
+        final probe = await BridgeEndpointProbe(
+          originResolver: netbirdTunnel?.localizeHttpBaseUrl,
+        ).probe(
           host: candidate.host,
           port: port,
           mode: probeMode,
@@ -599,8 +603,26 @@ class _SessionListScreenState extends State<SessionListScreen>
       unawaited(machineManagerCubit.refreshLatestBridgeVersionIfStale());
     }
 
+    final usesNetbird = netbirdTunnel?.shouldUseForUrl(url) ?? false;
+    var socketUrl = url;
+    if (usesNetbird) {
+      try {
+        socketUrl = await netbirdTunnel!.localizeWsUrl(url);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error.toString())),
+          );
+        }
+        return;
+      }
+    }
+
     // Health check before connecting
-    final health = await BridgeService.checkHealth(url);
+    final health = await BridgeService.checkHealth(
+      url,
+      netbirdTunnel: netbirdTunnel,
+    );
     if (health == null && mounted) {
       final shouldConnect = await _showSetupGuide(url);
       if (shouldConnect != true) return;
@@ -612,7 +634,8 @@ class _SessionListScreenState extends State<SessionListScreen>
     if (shouldConfirmAutomaticWsWithApiKey(
       connectionMode: connectionMode,
       useSsl: url.startsWith('wss://'),
-      usesEncryptedTunnel: false,
+      usesEncryptedTunnel:
+          usesNetbird && (netbirdTunnel?.isConnected ?? false),
       apiKey: trimmedApiKey,
     )) {
       final shouldContinue = await _confirmAutomaticWsWithApiKey();
@@ -640,7 +663,7 @@ class _SessionListScreenState extends State<SessionListScreen>
       await tunnelService.closeAll();
     }
     if (!mounted) return;
-    var connectUrl = url;
+    var connectUrl = socketUrl;
     if (trimmedApiKey.isNotEmpty) {
       final sep = connectUrl.contains('?') ? '&' : '?';
       connectUrl = '$connectUrl${sep}token=$trimmedApiKey';
@@ -2459,6 +2482,7 @@ class _SessionListScreenState extends State<SessionListScreen>
     final cubit = context.read<MachineManagerCubit>();
     final bridge = context.read<BridgeService>();
     final tunnelService = context.read<SshBridgeTunnelService?>();
+    final netbirdTunnel = context.read<NetbirdTunnelService?>();
     unawaited(cubit.refreshLatestBridgeVersionIfStale());
     late final String wsUrl;
     try {
@@ -2485,7 +2509,8 @@ class _SessionListScreenState extends State<SessionListScreen>
 
     final resolvedMachine = cubit.getMachine(machine.id) ?? machine;
     final usesEncryptedTunnel =
-        resolvedMachine.sshJumpHost?.trim().isNotEmpty == true;
+        resolvedMachine.sshJumpHost?.trim().isNotEmpty == true ||
+        (netbirdTunnel?.isConnected ?? false);
     final actualUseSsl = wsUrl.startsWith('wss://');
     if (!usesEncryptedTunnel && actualUseSsl != resolvedMachine.useSsl) {
       await tunnelService?.closeAll();

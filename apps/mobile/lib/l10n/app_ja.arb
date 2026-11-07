@@ -1606,5 +1606,40 @@
   "transcriptLoadOlder": "さらに古いメッセージを読み込む",
   "transcriptEmpty": "表示できるメッセージがありません",
   "transcriptLoadFailed": "メッセージを読み込めませんでした",
-  "transcriptBridgeUpdate": "以前のやり取りを表示するにはBridgeの更新が必要です。"
+  "transcriptBridgeUpdate": "以前のやり取りを表示するにはBridgeの更新が必要です。",
+  "netbirdTitle": "Netbird",
+  "netbirdStatusDisabled": "未启用",
+  "netbirdStatusStarting": "正在连接",
+  "netbirdStatusConnected": "隧道已连接",
+  "netbirdStatusError": "连接失败",
+  "netbirdStatusUnsupported": "当前平台不支持",
+  "netbirdManagementUrl": "管理地址",
+  "netbirdManagementUrlHint": "https://netbird.example.com",
+  "netbirdManagementUrlRequired": "请输入管理地址",
+  "netbirdSetupKey": "Setup Key",
+  "netbirdSetupKeyKeepHint": "留空则继续使用已保存的 Setup Key",
+  "netbirdSetupKeyRequired": "请输入 Setup Key",
+  "netbirdDeviceName": "设备名",
+  "netbirdDeviceNameRequired": "请输入设备名",
+  "netbirdSetupTitle": "设置 Netbird",
+  "netbirdSetupDescription": "保存并开启后，整个 App 会共用这一条 Netbird 隧道。",
+  "netbirdSaveAndEnable": "保存并开启",
+  "netbirdConfigSaved": "Netbird 配置已保存",
+  "netbirdRetry": "重新连接",
+  "netbirdEditConfig": "修改配置",
+  "netbirdClearLogin": "清除登录",
+  "netbirdClearLoginTitle": "清除 Netbird 登录？",
+  "netbirdClearLoginBody": "将停止隧道并删除保存的 Setup Key。再次启用时需要重新输入。",
+  "netbirdCleared": "Netbird 登录已清除",
+  "netbirdPeerSummary": "已连接节点：{connected}/{total}",
+  "@netbirdPeerSummary": {
+    "placeholders": {
+      "connected": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

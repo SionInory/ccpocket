@@ -117,7 +117,7 @@
         </receiver>
         <provider
             android:name="com.superlist.super_native_extensions.DataProvider"
-            android:authorities="com.k9i.ccpocket.SuperClipboardDataProvider"
+            android:authorities="com.nb.ccpocket.SuperClipboardDataProvider"
             android:exported="true"
             android:grantUriPermissions="true" />
     </application>

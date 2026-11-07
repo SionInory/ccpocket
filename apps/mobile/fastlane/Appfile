@@ -5,4 +5,4 @@ app_identifier("com.k9i.ccpocket")
 
 # Android
 json_key_file("")                   # Path to Google Play service account JSON (set in CI secrets)
-package_name("com.k9i.ccpocket")
+package_name("com.nb.ccpocket")

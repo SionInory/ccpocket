@@ -13,6 +13,7 @@ import '../constants/app_constants.dart';
 import '../models/machine.dart';
 import '../utils/network_endpoint.dart';
 import 'bridge_endpoint_probe.dart';
+import 'netbird_tunnel_service.dart';
 
 typedef BridgeWsUrlResolver = Future<String> Function(
   Machine machine, {
@@ -66,7 +67,12 @@ class MachineManagerService {
     this._prefs,
     this._secureStorage, {
     BridgeEndpointProbe? endpointProbe,
-  }) : _endpointProbe = endpointProbe ?? BridgeEndpointProbe();
+    NetbirdTunnelService? netbirdTunnel,
+  }) : _endpointProbe =
+           endpointProbe ??
+           BridgeEndpointProbe(
+             originResolver: netbirdTunnel?.localizeHttpBaseUrl,
+           );
 
   void configureBridgeTunnelResolvers({
     BridgeWsUrlResolver? wsUrlResolver,

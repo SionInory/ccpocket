@@ -5,10 +5,12 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/machine.dart';
 import '../../../providers/machine_manager_cubit.dart';
 import '../../../services/bridge_service.dart';
+import '../../../services/netbird_tunnel_service.dart';
 import '../models/settings_catalog.dart';
 import '../state/settings_state.dart';
 import '../widgets/bridge_update_status_tile.dart';
 import '../widgets/local_url_settings_tile.dart';
+import '../widgets/netbird_settings_card.dart';
 import '../widgets/prompt_history_section.dart';
 import '../widgets/settings_tiles.dart';
 
@@ -66,6 +68,13 @@ class ConnectionSettingsSection extends StatelessWidget {
                     (bridge.lastUrl ?? l.settingsNotConnected),
               ),
             ),
+            if (visibility.netbirdSupported)
+              SettingsItem(
+                id: SettingsEntryIds.netbird,
+                child: NetbirdSettingsCard(
+                  service: context.read<NetbirdTunnelService>(),
+                ),
+              ),
             if (visibility.hasBridgeUrl)
               SettingsItem(
                 id: SettingsEntryIds.localUrl,

@@ -57,6 +57,7 @@ import 'services/fcm_service.dart';
 import 'services/in_app_review_service.dart';
 import 'services/machine_manager_service.dart';
 import 'services/mock_preview_extension.dart';
+import 'services/netbird_tunnel_service.dart';
 import 'services/notification_service.dart';
 import 'services/performance_probe_extension.dart';
 import 'services/prompt_history_service.dart';
@@ -169,7 +170,13 @@ Future<CcpocketBootstrap> bootstrapCcpocket() async {
   // Initialize SharedPreferences and services
   final prefs = await SharedPreferences.getInstance();
   const secureStorage = FlutterSecureStorage();
-  final machineManagerService = MachineManagerService(prefs, secureStorage);
+  final netbirdTunnelService = NetbirdTunnelService(prefs, secureStorage);
+  unawaited(netbirdTunnelService.initialize());
+  final machineManagerService = MachineManagerService(
+    prefs,
+    secureStorage,
+    netbirdTunnel: netbirdTunnelService,
+  );
   // SSH is only supported on native platforms (not web)
   final sshStartupService = kIsWeb
       ? null
@@ -177,12 +184,36 @@ Future<CcpocketBootstrap> bootstrapCcpocket() async {
   final sshBridgeTunnelService = kIsWeb
       ? null
       : SshBridgeTunnelService(machineManagerService);
-  if (sshBridgeTunnelService != null) {
-    machineManagerService.configureBridgeTunnelResolvers(
-      wsUrlResolver: sshBridgeTunnelService.buildWsUrl,
-      httpBaseUrlResolver: sshBridgeTunnelService.buildHttpBaseUrl,
-    );
-  }
+  machineManagerService.configureBridgeTunnelResolvers(
+    wsUrlResolver: (machine, {password, promptForPassword}) async {
+      if (machine.sshJumpHost?.trim().isNotEmpty == true) {
+        final tunnel = sshBridgeTunnelService;
+        if (tunnel == null) {
+          throw UnsupportedError('当前平台不支持 SSH 跳板机');
+        }
+        return tunnel.buildWsUrl(
+          machine,
+          password: password,
+          promptForPassword: promptForPassword,
+        );
+      }
+      return netbirdTunnelService.localizeWsUrl(machine.wsUrl);
+    },
+    httpBaseUrlResolver: (machine, {password, promptForPassword}) async {
+      if (machine.sshJumpHost?.trim().isNotEmpty == true) {
+        final tunnel = sshBridgeTunnelService;
+        if (tunnel == null) {
+          throw UnsupportedError('当前平台不支持 SSH 跳板机');
+        }
+        return tunnel.buildHttpBaseUrl(
+          machine,
+          password: password,
+          promptForPassword: promptForPassword,
+        );
+      }
+      return netbirdTunnelService.localizeHttpBaseUrl(machine.httpUrl);
+    },
+  );
 
   // Shorebird manual update check (auto_update is disabled in shorebird.yaml).
   // Reads the user-selected track from SharedPreferences and checks for patches
@@ -192,7 +223,7 @@ Future<CcpocketBootstrap> bootstrapCcpocket() async {
     unawaited(_checkShorebirdUpdate(prefs));
   }
 
-  final bridge = BridgeService();
+  final bridge = BridgeService(netbirdTunnel: netbirdTunnelService);
   bridge.onDisconnect = sshBridgeTunnelService?.closeAll;
   final fcmService = FcmService();
   final draftService = DraftService(prefs);
@@ -283,6 +314,11 @@ Future<CcpocketBootstrap> bootstrapCcpocket() async {
         ),
         RepositoryProvider<MachineManagerService>(
           create: (_) => machineManagerService,
+          lazy: false,
+          dispose: (service) => service.dispose(),
+        ),
+        RepositoryProvider<NetbirdTunnelService>(
+          create: (_) => netbirdTunnelService,
           lazy: false,
           dispose: (service) => service.dispose(),
         ),
@@ -388,6 +424,7 @@ class _CcpocketAppState extends State<CcpocketApp> {
       onStateChange: (state) {
         if (state == AppLifecycleState.resumed) {
           NotificationService.instance.cancelAll();
+          unawaited(_resumeServices());
         }
       },
     );
@@ -396,6 +433,18 @@ class _CcpocketAppState extends State<CcpocketApp> {
     if (!kIsWeb) {
       _appLinks = AppLinks();
       _initDeepLinks();
+    }
+  }
+
+  Future<void> _resumeServices() async {
+    final netbird = context.read<NetbirdTunnelService?>();
+    if (netbird != null) {
+      await netbird.handleAppResumed();
+      if (!mounted) return;
+      if (netbird.isEnabled && !netbird.isConnected) return;
+    }
+    if (mounted) {
+      context.read<BridgeService>().ensureConnected();
     }
   }
 

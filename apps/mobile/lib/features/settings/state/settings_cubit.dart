@@ -20,6 +20,7 @@ import '../../../services/app_icon_service.dart';
 import '../../../services/bridge_service.dart';
 import '../../../services/fcm_service.dart';
 import '../../../services/machine_manager_service.dart';
+import '../../../services/netbird_tunnel_service.dart';
 import '../../../services/revenuecat_service.dart';
 import '../../../theme/code_text_style.dart';
 import '../../../utils/platform_helper.dart';
@@ -149,9 +150,13 @@ class SettingsCubit extends Cubit<SettingsState> {
     final url = bridge.lastUrl;
     if (url == null) return;
 
-    final uri = Uri.tryParse(
-      url.replaceFirst('ws://', 'http://').replaceFirst('wss://', 'https://'),
-    );
+    final uri =
+        NetbirdTunnelService.originalOriginOf(url) ??
+        Uri.tryParse(
+          url
+              .replaceFirst('ws://', 'http://')
+              .replaceFirst('wss://', 'https://'),
+        );
     if (uri == null) return;
 
     final machine = manager.findByHostPort(

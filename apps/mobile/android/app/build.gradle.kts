@@ -17,7 +17,7 @@ if (!googleServicesFile.exists()) {
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
         "android_client_info": {
-          "package_name": "com.k9i.ccpocket"
+          "package_name": "com.nb.ccpocket"
         }
       },
       "api_key": [
@@ -50,7 +50,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.k9i.ccpocket"
+    namespace = "com.nb.ccpocket"
     compileSdk = flutter.compileSdkVersion
     // The 16 KB page-aligned irondash fork requires NDK 29.
     ndkVersion = "29.0.13846066"
@@ -66,7 +66,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.k9i.ccpocket"
+        applicationId = "com.nb.ccpocket"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -100,6 +100,7 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation(files("libs/netbird.aar"))
 }
 
 flutter {

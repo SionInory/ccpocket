@@ -32,6 +32,7 @@ class SettingsVisibility {
     this.appIconSupported = false,
     this.hideVoiceInput = false,
     this.terminalAppEnabled = false,
+    this.netbirdSupported = false,
     this.isMacOS = false,
     this.isMobile = false,
     this.bothAgents = true,
@@ -52,6 +53,7 @@ class SettingsVisibility {
   final bool appIconSupported;
   final bool hideVoiceInput;
   final bool terminalAppEnabled;
+  final bool netbirdSupported;
   final bool isMacOS;
   final bool isMobile;
   final bool bothAgents;
@@ -92,6 +94,7 @@ abstract final class SettingsEntryIds {
   static const localUrl = 'local_url';
   static const bridgeUpdate = 'bridge_update';
   static const promptHistory = 'prompt_history';
+  static const netbird = 'netbird';
   static const theme = 'theme';
   static const language = 'language';
   static const appIcon = 'app_icon';
@@ -166,6 +169,13 @@ final List<SettingsEntry> settingsEntries = [
     title: (l) => l.promptHistorySectionTitle,
     keywords: 'prompt history sync 履歴 同期',
     visibleWhen: (v) => v.hasActiveMachine && v.promptHistoryAvailable,
+  ),
+  SettingsEntry(
+    id: SettingsEntryIds.netbird,
+    category: SettingsCategory.connection,
+    title: (l) => l.netbirdTitle,
+    keywords: 'netbird vpn tunnel setup key 隧道 管理地址',
+    visibleWhen: (v) => v.netbirdSupported,
   ),
 
   // ── Notifications ──

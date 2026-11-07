@@ -1,4 +1,4 @@
-package com.k9i.ccpocket
+package com.nb.ccpocket
 
 import android.content.ComponentName
 import android.content.pm.PackageManager
@@ -7,8 +7,11 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 private const val APP_ICON_CHANNEL = "ccpocket/app_icon"
+private const val NETBIRD_CHANNEL = "ccpocket/netbird"
 
 class MainActivity : AudioServiceActivity() {
+    private var netbirdBridge: NetbirdBridge? = null
+
     // app_links owns URI delivery. FlutterActivity reads
     // `flutter_deeplinking_enabled` from the launching component, which is a
     // launcher activity-alias without that meta-data (default: true), so the
@@ -36,6 +39,13 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+        val bridge = netbirdBridge ?: NetbirdBridge(applicationContext).also {
+            netbirdBridge = it
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NETBIRD_CHANNEL,
+        ).setMethodCallHandler(bridge)
     }
 
     private fun getCurrentIcon(): String? {

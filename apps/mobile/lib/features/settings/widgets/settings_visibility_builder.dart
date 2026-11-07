@@ -6,6 +6,7 @@ import '../../../constants/feature_flags.dart';
 import '../../../models/new_session_tab.dart';
 import '../../../services/bridge_service.dart';
 import '../../../services/machine_manager_service.dart';
+import '../../../services/netbird_tunnel_service.dart';
 import '../../../services/prompt_history_service.dart';
 import '../../../services/revenuecat_service.dart';
 import '../../../utils/platform_helper.dart';
@@ -86,6 +87,9 @@ SettingsVisibility resolveSettingsVisibility(
   required SupportCatalogState catalog,
 }) {
   final bridge = context.read<BridgeService>();
+  final netbird = _hasProvider<NetbirdTunnelService>(context)
+      ? context.read<NetbirdTunnelService>()
+      : null;
   return SettingsVisibility(
     hasActiveMachine: state.activeMachineId != null,
     bridgeConnected: bridge.isConnected,
@@ -98,6 +102,7 @@ SettingsVisibility resolveSettingsVisibility(
     terminalAppEnabled: FeatureFlags.current.isEnabled(
       AppFeature.terminalAppIntegration,
     ),
+    netbirdSupported: netbird?.isSupported ?? false,
     isMacOS: isMacOSPlatform,
     isMobile: isMobilePlatform,
     bothAgents:

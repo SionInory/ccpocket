@@ -15,6 +15,7 @@ import '../models/protocol_version.dart';
 import '../utils/codex_plan_update.dart';
 import '../utils/network_endpoint.dart';
 import 'bridge_service_base.dart';
+import 'netbird_tunnel_service.dart';
 import 'session_pending_input_state.dart';
 import 'session_runtime_store.dart';
 
@@ -415,6 +416,7 @@ class BridgeService implements BridgeServiceBase {
 
   // Auto-reconnect
   String? _lastUrl;
+  String? _lastTransportUrl;
   int _connectionEpoch = 0;
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
@@ -622,12 +624,19 @@ class BridgeService implements BridgeServiceBase {
     this.galleryRequestTimeout = const Duration(seconds: 10),
     this.legacyWorktreeRemoveRequestTimeout = const Duration(seconds: 10),
     WebSocketChannel Function(Uri uri)? channelFactory,
-  }) : _channelFactory = channelFactory ?? WebSocketChannel.connect {
+    NetbirdTunnelService? netbirdTunnel,
+  }) : _channelFactory = channelFactory ?? WebSocketChannel.connect,
+       _netbirdTunnel = netbirdTunnel {
     unawaited(_ensureOfflineQueueRestored());
   }
 
   /// The last WebSocket URL used for connection (or reconnection).
   String? get lastUrl => _lastUrl;
+
+  /// The actual WebSocket URL opened by the channel, including the current
+  /// token and any active Netbird proxy path. Internal callers must use this
+  /// for auxiliary sockets; UI and bridge identity continue to use [lastUrl].
+  String? get lastTransportUrl => _lastTransportUrl;
 
   void _rememberPromptHistoryBridgeId(String? value) {
     if (value == null || value.isEmpty) return;
@@ -748,11 +757,21 @@ class BridgeService implements BridgeServiceBase {
     final uri = Uri.tryParse(url);
     if (uri == null) return null;
     final scheme = uri.scheme == 'wss' ? 'https' : 'http';
-    return formatUriOrigin(
+    final origin = formatUriOrigin(
       scheme: scheme,
       host: uri.host,
       port: uri.hasPort ? uri.port : null,
     );
+    if (uri.pathSegments.length >= 2 &&
+        uri.pathSegments.first == 't' &&
+        _netbirdTunnel != null) {
+      return '$origin/t/${uri.pathSegments[1]}';
+    }
+    final netbird = _netbirdTunnel;
+    if (netbird == null) return origin;
+    final localized = netbird.localizeHttpBaseUrlSync(origin);
+    if (localized != null) return localized;
+    return netbird.isEnabled ? null : origin;
   }
 
   static const _prefKeyUrl = 'bridge_url';
@@ -769,6 +788,7 @@ class BridgeService implements BridgeServiceBase {
   /// real service logic runs against a fixture Bridge (see
   /// docs/reflex-prototype.md).
   final WebSocketChannel Function(Uri uri) _channelFactory;
+  final NetbirdTunnelService? _netbirdTunnel;
 
   Future<void>? _offlineQueueRestore;
   Future<void> _offlinePendingPersistence = Future<void>.value();
@@ -812,11 +832,21 @@ class BridgeService implements BridgeServiceBase {
         preserveQueuedInputs: true,
       );
     }
-    _lastUrl = url;
+    _lastUrl = NetbirdTunnelService.originalUrlOf(url) ?? url;
+    _lastTransportUrl = null;
 
     _setBridgeConnectionState(BridgeConnectionState.connecting);
     try {
-      final channel = _channelFactory(Uri.parse(url));
+      final uri = Uri.parse(url);
+      final localized = _netbirdTunnel?.localizeWsUrlSync(url);
+      if (_netbirdTunnel?.isEnabled == true && localized == null) {
+        throw StateError(
+          _netbirdTunnel.snapshot.error ?? 'Netbird 未连接',
+        );
+      }
+      final transportUrl = localized ?? url;
+      _lastTransportUrl = transportUrl;
+      final channel = _channelFactory(Uri.parse(transportUrl));
       _channel = channel;
       _channelSub = channel.stream.listen(
         (data) {
@@ -1600,10 +1630,14 @@ class BridgeService implements BridgeServiceBase {
   }
 
   String _bridgeTargetKey(Uri uri) {
-    final scheme = uri.scheme.toLowerCase();
-    final host = canonicalHostIdentity(uri.host);
-    final port = uri.hasPort ? uri.port : (scheme == 'wss' ? 443 : 80);
-    final path = uri.path.isEmpty ? '/' : uri.path;
+    final originalUrl = NetbirdTunnelService.originalUrlOf(uri.toString());
+    final effectiveUri = originalUrl == null ? uri : Uri.parse(originalUrl);
+    final scheme = effectiveUri.scheme.toLowerCase();
+    final host = canonicalHostIdentity(effectiveUri.host);
+    final port = effectiveUri.hasPort
+        ? effectiveUri.port
+        : (scheme == 'wss' ? 443 : 80);
+    final path = effectiveUri.path.isEmpty ? '/' : effectiveUri.path;
     return '${formatUriOrigin(scheme: scheme, host: host, port: port)}$path';
   }
 
@@ -4881,6 +4915,15 @@ class BridgeService implements BridgeServiceBase {
     }
 
     if (shouldConnect?.call() == false) return false;
+    final netbird = _netbirdTunnel;
+    if (netbird?.isEnabled == true) {
+      try {
+        await netbird!.waitUntilConnected();
+      } catch (error) {
+        logger.warning('[bridge] Netbird unavailable for auto-connect: $error');
+        return false;
+      }
+    }
     connect(connectUrl);
     return true;
   }
@@ -4902,15 +4945,24 @@ class BridgeService implements BridgeServiceBase {
 
   /// Check if the Bridge server is reachable via /health endpoint.
   /// Returns the health JSON on success, null on failure.
-  static Future<Map<String, dynamic>?> checkHealth(String wsUrl) async {
+  static Future<Map<String, dynamic>?> checkHealth(
+    String wsUrl, {
+    NetbirdTunnelService? netbirdTunnel,
+  }) async {
     try {
       final uri = Uri.tryParse(wsUrl);
       if (uri == null) return null;
       final scheme = uri.scheme == 'wss' ? 'https' : 'http';
-      final healthUrl =
-          '${formatUriOrigin(scheme: scheme, host: uri.host, port: uri.hasPort ? uri.port : null)}/health';
+      final origin = formatUriOrigin(
+        scheme: scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+      );
+      final localized = netbirdTunnel?.localizeHttpBaseUrlSync(origin);
+      if (netbirdTunnel?.isEnabled == true && localized == null) return null;
+      final base = localized ?? origin;
       final response = await http
-          .get(Uri.parse(healthUrl))
+          .get(Uri.parse('$base/health'))
           .timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -5017,6 +5069,7 @@ class BridgeService implements BridgeServiceBase {
     _channelSub = null;
     _channel?.sink.close();
     _channel = null;
+    _lastTransportUrl = null;
     _setBridgeConnectionState(BridgeConnectionState.disconnected);
     _clearBridgeScopedState(
       clearOfflineQueue: true,
@@ -5081,6 +5134,7 @@ class BridgeService implements BridgeServiceBase {
     _channelSub = null;
     _channel?.sink.close();
     _channel = null;
+    _lastTransportUrl = null;
     _messageController.close();
     _taggedMessageController.close();
     _connectionController.close();

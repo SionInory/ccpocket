@@ -48,7 +48,7 @@ def google_play_release_state(credentials:, version_code:)
       timeout: 300,
     },
   )
-  client.begin_edit(package_name: "com.k9i.ccpocket")
+  client.begin_edit(package_name: "com.nb.ccpocket")
 
   begin
     production_release = client.track_releases("production").find do |release|
@@ -84,7 +84,7 @@ def google_play_store_state(credentials:)
       timeout: 300,
     },
   )
-  client.begin_edit(package_name: "com.k9i.ccpocket")
+  client.begin_edit(package_name: "com.nb.ccpocket")
 
   begin
     releases = client.track_releases("production")
@@ -270,7 +270,7 @@ platform :android do
 
     upload_to_play_store(
       json_key_data: credentials,
-      package_name: "com.k9i.ccpocket",
+      package_name: "com.nb.ccpocket",
       track: "internal",
       track_promote_to: "production",
       track_promote_release_status: release_status,

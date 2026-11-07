@@ -49,9 +49,13 @@ bool shouldConfirmAutomaticWsWithApiKey({
 /// are available. API keys and other credentials are never included.
 class BridgeEndpointProbe {
   final BridgeHealthRequest _request;
+  final Future<String> Function(String origin)? _originResolver;
 
-  BridgeEndpointProbe({BridgeHealthRequest? request})
-    : _request = request ?? _defaultRequest;
+  BridgeEndpointProbe({
+    BridgeHealthRequest? request,
+    Future<String> Function(String origin)? originResolver,
+  }) : _request = request ?? _defaultRequest,
+       _originResolver = originResolver;
 
   Future<BridgeEndpointProbeResult> probe({
     required String host,
@@ -93,7 +97,11 @@ class BridgeEndpointProbe {
     final scheme = transport == BridgeTransport.secure ? 'https' : 'http';
     final origin = formatUriOrigin(scheme: scheme, host: host, port: port);
     try {
-      final response = await _request(Uri.parse('$origin/health'), timeout);
+      final resolvedOrigin = await _originResolver?.call(origin) ?? origin;
+      final response = await _request(
+        Uri.parse('$resolvedOrigin/health'),
+        timeout,
+      );
       if (response.statusCode != 200) {
         return const BridgeEndpointProbeResult.unreachable();
       }
