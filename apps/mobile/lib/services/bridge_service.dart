@@ -838,10 +838,11 @@ class BridgeService implements BridgeServiceBase {
     _setBridgeConnectionState(BridgeConnectionState.connecting);
     try {
       final uri = Uri.parse(url);
-      final localized = _netbirdTunnel?.localizeWsUrlSync(url);
-      if (_netbirdTunnel?.isEnabled == true && localized == null) {
+      final netbird = _netbirdTunnel;
+      final localized = netbird?.localizeWsUrlSync(url);
+      if (netbird != null && netbird.isEnabled && localized == null) {
         throw StateError(
-          _netbirdTunnel.snapshot.error ?? 'Netbird 未连接',
+          netbird.snapshot.error ?? 'Netbird 未连接',
         );
       }
       final transportUrl = localized ?? url;
